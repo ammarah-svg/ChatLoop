@@ -2,13 +2,14 @@ const express = require("express");
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const jwt = require("jsonwebtoken");
+const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const connect = require("./config/connectDB");
 const bcrypt = require('bcryptjs');
 const Message = require('./models/Message')
 const ws = require('ws');
 const fs = require('fs');
-require("dotenv").config();
+dotenv.config();
 const app = express();
 const cors = require("cors");
 
@@ -49,7 +50,7 @@ async function getUserDataFromRequest(req) {
     }
   });
 
-}
+};
 
 
 app.get('/messages/:userId', async (req,res) => {
@@ -84,20 +85,32 @@ app.get('/profile', (req,res) => {
   }
 });
 
-app.post('/login', async (req,res) => {
-  const {email, password} = req.body;
-  const foundUser = await User.findOne({email});
-  if (foundUser) {
-    const passOk = bcrypt.compareSync(password, foundUser.password);
-    if (passOk) {
-      jwt.sign({userId:foundUser._id,email}, jwtSecret, {}, (err, token) => {
-        res.cookie('token', token, {sameSite:'none', secure:true}).json({
-          id: foundUser._id,
-        });
-      });
-    }
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body; // Changed to email
+  const foundUser = await User.findOne({ email }); // Change to email lookup
+
+  if (!foundUser) {
+    return res.status(401).json({ message: "User not found." }); // Send error if user is not found
   }
+
+  const passOk = bcrypt.compareSync(password, foundUser.password);
+  if (!passOk) {
+    return res.status(401).json({ message: "Invalid password." }); // Send error if password is incorrect
+  }
+
+  jwt.sign({ userId: foundUser._id, username: foundUser.username }, jwtSecret, {}, (err, token) => {
+    if (err) {
+      return res.status(500).json({ message: "Could not create token." }); // Handle token creation errors
+    }
+
+    // Send token as cookie and user information as response
+    res.cookie('token', token, { sameSite: 'none', secure: true }).json({
+      id: foundUser._id,
+      username: foundUser.username, // Ensure you send back the username
+    });
+  });
 });
+
 
 // Modified logout function
 app.post('/logout', (req,res) => {
@@ -136,12 +149,7 @@ app.post("/register", async (req, res) => {
 
       // Set the cookie with the token
       res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production", // Secure flag for production
-          sameSite: "strict", // CSRF protection
-        })
-        .status(201)
+      res.cookie('token', token, {sameSite:'none', secure:true}).status(201)
         .json({ id: createdUser._id, message: "User registered successfully", username });
     });
   } catch (error) {
@@ -209,8 +217,6 @@ wss.on('connection', (connection, req) => {
   }
 
   connection.on('message', async (message) => {
-   
-   try {
     const messageData = JSON.parse(message.toString());
     const {recipient, text, file} = messageData;
     let filename = null;
@@ -220,7 +226,7 @@ wss.on('connection', (connection, req) => {
       const ext = parts[parts.length - 1];
       filename = Date.now() + '.'+ext;
       const path = __dirname + '/uploads/' + filename;
-      const bufferData = Buffer.from(file.data.split(',')[1], 'base64');
+      const bufferData = new Buffer(file.data.split(',')[1], 'base64');
       fs.writeFile(path, bufferData, () => {
         console.log('file saved:'+path);
       });
@@ -243,14 +249,6 @@ wss.on('connection', (connection, req) => {
           _id:messageDoc._id,
         })));
     }
-   } catch (error) {
-    console.error('Error processing message:', error);
-   }
-   
-   
-   
-   
-    
   });
 
   // notify everyone about online people (when someone connects)

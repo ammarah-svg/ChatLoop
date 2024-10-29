@@ -3,8 +3,10 @@ const mongoose = require('mongoose');
 const userSchema = mongoose.Schema({
     username: {
         type: String,
-        required: [true, 'Please enter username']
+        required: [true, 'Please enter a username'],
+       
     },
+    
     email: {
         type: String,
         required: [true, 'Please enter email'],
@@ -13,9 +15,11 @@ const userSchema = mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, 'Please enter password']
-    },
- 
+        required: [true, 'Please enter a password'],
+        minlength: [8, 'Password must be at least 8 characters long'],
+       
+    }, 
+  
 }, {
     timestamps: true
 });
